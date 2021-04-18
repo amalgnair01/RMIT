@@ -1,0 +1,591 @@
+---
+title: "MATH1318 Time Series Analysis"
+author:
+- name: Amal Gopidasan Nair - S3820786
+  affiliation: RMIT University
+subtitle: Assignment 1
+output:
+  html_document:
+    toc: yes
+    toc_depth: 3
+    number_sections: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+The ozone layer is the region present in the Earth's stratosphere which filters out most of the sun's ultraviolet radiations. The ozone layer has been depleting for many years and causing increased level of UV radiation on Earth's surface affecting all living organisms.
+<p>We analyze the yearly changes in the thickness of ozone layer from 1927 to 2016 in this assignment.<br>
+The following task is performed in this assignment:</p>
+* Find the best model
+* Forecast for the next five years
+* Propose a set of possible ARIMA
+
+# Data Description
+
+* The dataset provided in in csv format with 90 observations.
+* The data is from 1927 to 2016.
+* The measurement is done in Dobson units.
+* Negative value represents a decrease in the thickness and positive value represents increase in thickness.
+
+# Data Preparation
+
+```{r}
+options(warn=-1)
+library(TSA)
+library(tseries)
+
+# Importing the data file in R
+ozone<-read.csv("data1.csv", header = FALSE)
+rownames(ozone) <- seq(from=1927, to=2016)
+class(ozone)
+```
+
+* The class of the dataset is found to be data frame.
+* The data frame is then converted into time series object.
+
+```{r}
+ozonets <- ts(as.vector(ozone), start=1927, end=2016)
+class(ozonets)
+summary(ozonets)
+```
+
+# Model Descriptive Analysis
+
+After conversion of the data into Time series object and then the time series plot and scatter plot is generated to understand the five major points associated with the series and the correlation with subsequent years. 
+The time series plot is generated and evaluated.
+
+```{r, fig.width=10,fig.align="center"}
+plot(ozonets,type='o',ylab='Thickness of ozone layer (Dobson Units)', xlab='Year', main ='Time Series Plot-Change in Ozone layer thickness - Figure 1' )
+```
+
+From figure 1 we discuss on the 5 major point:
+
+**1.Trend**</p>
+We can observe that the time series plot follows a decreasing downward trend which denote that the ozone layer's thickness is reducing over the time period.
+
+**2.Seasonality**</p>
+We don't observe any repeating patterns denoting no seasonality in the time series.
+
+**3.Changing Variance**</p>
+We don't observe any significant change in variance overall.
+
+**4.Behavior**</p>
+We can observe both Auto regressive and moving average like behavior with local trends and successive points related to on another.
+
+**5.Intervention**</p>
+We don't observe any sudden change point in the time series.
+
+To understand the correlation between the succeeding data points, which if present enables us to forecast the values for the consecutive year we plot a scatter plot and find the correlation value. 
+
+```{r, fig.width=10,fig.align="center"}
+plot(y=ozonets,x=zlag(ozonets),ylab='Thickness of ozone layer', xlab='Previous Year Thickness of ozone layer', main = "Scatter plot of thickness of Ozone layer- Figure 2") 
+```
+```{r}
+y = ozonets
+x=zlag(ozonets)
+index = 2:length(x)
+cor(y[index],x[index])
+```
+
+From figure 2 and the correlation factor(~87%) we can observe that there is a high correlation between the succeeding year and the thickness of ozone layer of one year can impact the thickness in future years. 
+
+# Model Fitting
+The time series object is analyzed for finding the trend. We consider linear, quadratic, cosine and seasonal trends to find the bet fitting model.
+
+## Linear Regression Model
+The deterministic linear trend model is expressed as : </p>
+μt=β<sub>0</sub>+β<sub>1</sub>t </p>
+where β<sub>0</sub>=*Intercept* β<sub>1</sub>=*Slope of the linear trend*
+
+### Summary Statistics and Plot
+The slope and intercept of the linear trend is estimated using least-square regression.
+
+```{r}
+ozonelm=lm(ozonets~time(ozonets))
+summary(ozonelm)
+```
+
+β<sub>0</sub>= 213.72 </p>
+β<sub>1</sub>= -0.11
+
+
+```{r, fig.width=10,fig.align="center"}
+plot(ozonets,type='o',ylab='Thickness of ozone layer (Dobson Units)', xlab='Year', main ='Time Series Plot-Change in Ozone layer thickness - Figure 3' )
+abline(ozonelm, col='red')
+legend("bottomleft" ,lty=1, bty = "n", text.width = 10, col=c("black","red"), 
+       c("Thickness of Ozone Layer", "Linear Slope"))
+```
+
+From the summary statistics we can observe that the intercept and slope are significant and the model is also significant as the p-value and Pr value is less than 0.05.
+With multiple R<sup>2</sup> value we can understand that around 67% of the variation in the series is explained by the linear trend. We prefer between 75%-85% of variation. Also the adjusted R<sup>2</sup> value and the multiple R<sup>2</sup> are approximately the same value.
+From the time series plot we can observe that overall the data follows a linear trend along the slope.
+
+### Residual Analysis
+
+Residual Analysis is performed to validate the model. The estimator and predictor of observed stochastic component, X<sub>t</sub> is called the residual corresponding to the t<sup>th</sup> observation.
+X<sub>t</sub>=Y<sub>t</sub>−μ<sub>t</sub>
+
+#### Time Series Plot of Standardized Residuals
+
+```{r, fig.width=10,fig.align="center"}
+ozonelmresidual <- rstudent(ozonelm)
+plot(y=ozonelmresidual,x=as.vector(time(ozonets)), xlab='Time', ylab='Standardized Residuals', type = 'o',main = "Time Series Plot of Residuals - Figure 4")
+```
+
+From Figure-4 we can observe that the residuals are around the mean (mean=0). Since most of the values are between 2 and -2 the residuals values are not big values. 
+
+#### Histogram of Standardized Residuals
+
+The normality of the residual is checked by plotting histogram.
+```{r, fig.width=10,fig.align="center"}
+hist(ozonelmresidual,xlab='Standardized Residuals', main = "Histogram of the standardized residuals - Figure 5", freq = FALSE, ylim = c(0,0.5))
+curve(dnorm(x, mean=mean(ozonelmresidual), sd=sd(ozonelmresidual)), col="red", lwd=2, add=TRUE, yaxt="n")
+
+
+```
+
+From Figure-5 we can observe that the distribution follows a normal curve approximately. 
+
+#### Q-Q Plot of Standardized Residuals
+
+```{r, fig.width=10,fig.align="center"}
+qqnorm(ozonelmresidual, main="Q-Q Plot for the Linear Model- Figure 6")
+qqline(ozonelmresidual, col="red")
+```
+
+From Figure-6 we can observe that the data doesn't follow a normal distribution in the beginning and end as it isn't following a straight line pattern.
+
+#### Shapiro- Wilk Test
+
+We perform a hypothesis test called Shapiro Wilk test to check the normality assumption. Shapiro-Wilk test calculates the correlation between the residuals and corresponding normal quantiles.
+
+```{r}
+shapiro.test(ozonelmresidual)
+```
+
+Since the p-value is greater than 0.05, we fail to reject the null hypothesis and conclude that the stochastic component of this model is normally distributed.
+
+#### Auto-correlation Function Plot of Standardized Residuals
+
+ACF plot is used to validate the correlation in the Standardized Residuals.
+
+```{r, fig.width=10,fig.align="center"}
+acf(ozonelmresidual,main="ACF of Standardized Residuals - Figure 7")
+```
+
+The correlation value is significantly higher than the confidence interval at one instance and sightly significant at another 2 instance considering different lags. This concludes that there is significant auto-correlation left with the residuals. 
+
+## Quadratic Trend Model 
+
+The deterministic quadratic trend model is expressed as follows: </p>
+μt=β<sub>0</sub>+β<sub>1</sub>t+β<sub>2</sub>t<sup>2</sup> </p>
+where β<sub>0</sub>=*Intercept* β<sub>1</sub>=*Slope of the linear trend* β<sub>2</sub>=*Quadratic trend in time*
+
+### Summary Statistics and Plot
+
+The slope, intercept of the linear trend and quadratic trend is estimated using least-square regression.
+
+```{r}
+t = time(ozonets)
+t2 = t^2
+ozoneqm = lm(ozonets~ t + t2) # label the quadratic trend model as ozoneqm
+summary(ozoneqm)
+```
+
+β0= -5.733e+03 </p>
+β1=  5.924e+00 </p>
+β2= -1.530e-03 </p>
+
+```{r, fig.width=10,fig.align="center"}
+plot(ts(fitted(ozoneqm)), ylim=c(min(c(fitted(ozoneqm),                          as.vector(ozonets))),max(c(fitted(ozoneqm),as.vector(ozonets)))),col=c('red'), ylab='Thickness of ozone layer (Dobson Units)',
+main = "Time Series plot with fitted Quadratic curve - Figure 8")
+lines(as.vector(ozonets),type="o")
+legend("bottomleft" ,lty=1, bty = "n", text.width = 10, col=c("black","red"), 
+       c("Thickness of Ozone Layer", "Quadratic Curve"))
+```
+
+From the summary statistics we can observe that the model is significant as the p-value is less than 0.05 and hence we fail to reject the null hypothesis. The adjusted R-squared value explains 73.31% of the variation in the series and is almost in the preferred percent of variation.
+From the time series plot we can observe that the time series data follows the quadratic trend.
+
+### Residual Analysis
+
+#### Time Series Plot of Standardized Residuals
+
+```{r, fig.width=10,fig.align="center"}
+ozoneqm.res <- rstudent(ozoneqm)
+plot(y=ozoneqm.res,x=as.vector(time(ozonets)), xlab='Time', ylab='Standardized Residuals', type = 'o',main = "Time Series Plot of Residuals - Figure 9")
+```
+
+From Figure 9 we observe that the residuals are present around the mean of the standardized residuals.
+
+#### Histogram of Standardized Residuals
+
+The normality of the residuals are plotted.
+
+```{r, fig.width=10,fig.align="center"}
+hist(ozoneqm.res,xlab='Standardized Residuals', main = "Histogram of the standardized residuals - Figure 10", freq = FALSE, ylim = c(0,0.5))
+curve(dnorm(x, mean=mean(ozoneqm.res), sd=sd(ozoneqm.res)), col="red", lwd=2, add=TRUE, yaxt="n")
+```
+
+From Figure-10 we can observe that the distribution follows a normal curve approximately with slight left skewness. 
+
+#### Q-Q Plot of Standardized Residuals
+
+```{r, fig.width=10,fig.align="center"}
+qqnorm(ozoneqm.res, main="Q-Q Plot for the Linear Model- Figure 11")
+qqline(ozoneqm.res, col="red")
+```
+
+From the QQ plot( Figure 11) we observe that the data follows a normal distribution and follows the straight line with a few observation out of the line with small residual value.
+
+#### Shapiro- Wilk Test
+
+We perform a hypothesis test called Shapiro Wilk test to check the normality assumption. Shapiro-Wilk test calculates the correlation between the residuals and corresponding normal quantiles.
+
+```{r}
+shapiro.test(ozoneqm.res)
+```
+
+Since the p-value is greater than 0.05 we fail to reject the null hypothesis and conclude that the stochastic component of this model is normally distributed.
+
+#### Auto-correlation Function Plot of Standardized Residuals
+
+```{r, fig.width=10,fig.align="center"}
+acf(ozoneqm.res,main="ACF of Standardized Residuals - Figure 12")
+```
+
+The correlation value is significantly higher than the confidence interval at several lags. 
+
+## Harmonic/Cosine Trend Model
+
+The time series data provided is yearly reading and hence we don't find any seasonality in the time series object. The model is tested for fit with the harmonic trend despite no seasonality. 
+
+### Summary Statistics
+For getting the summary statistics we use the harmonic() function, where we need to add the time series object and an m value which is the number of pairs of harmonic functions to be created; 2m must be less than or equal to the frequency of x. Since here our frequency is 1 we consider m to be any value below 0.5. 
+```{r}
+harm.=harmonic(ozonets,m=0.4) # calculate cos(2*pi*t) and sin(2*pi*t)
+ozonehm=lm(ozonets~harm.)
+summary(ozonehm)
+```
+
+From the summary statistics we find that the p-value is greater than alpha, 0.05 and hence reject the hypothesis, .i.e. the harmonic model fit is insignificant. Also the R<sup>2</sup> is negative. 
+
+### Residual Analysis
+#### Time Series Plot of Standardized Residuals
+```{r ,fig.width=10,fig.align="center"}
+ozonehm.res<-rstudent(ozonehm)
+plot(ozonehm.res,x=as.vector(time(ozonets)),xlab='Time', ylab='Standardized Residuals',type='o',main="Time series Plot of Residuals - Figure 13")
+```
+
+From figure 13 we can observe that the residuals are present around the mean of the standardized residuals and is have a downward trend.
+
+#### Histogram of Standardized Residuals
+
+The normality of the residual are plotted as histogram.
+
+```{r,fig.width=10,fig.align="center"}
+hist(ozonehm.res,xlab='Standardized Residuals', main = "Histogram of the standardized residuals - Figure 14", freq = FALSE, ylim = c(0,0.6))
+curve(dnorm(x, mean=mean(ozonehm.res), sd=sd(ozonehm.res)), col="red", lwd=2, add=TRUE, yaxt="n")
+```
+
+#### Q-Q Plot of Standardized Residuals
+
+```{r,fig.width=10,fig.align="center"}
+qqnorm(ozonehm.res, main="Q-Q Plot for the Linear Model- Figure 15")
+qqline(ozonehm.res, col="red")
+```
+
+From the Q-Q plot we can observe that the time series data doesn't follow the straight line and hence not following normality.
+
+#### Shapiro-Wilk Test
+
+```{r}
+shapiro.test(rstudent(ozonehm))
+```
+
+The p-value is less than the alpha significance and hence we reject the null hypothesis and conclude that the time series is not normally distributed.
+
+#### Auto-correlation Function Plot of Standard Residuals
+
+```{r}
+acf(ozonehm.res,main="ACF of Standardized Residuals - Figure 16")
+```
+
+The correlation value is significantly higher at almost all points than the confidence interval and is also having slow decaying pattern showing that the time series is non-stationary in nature which will be further analyzed in other chapters.
+
+## Cyclic or Seasonal Trend
+
+We can't use cyclic or seasonal trend to fit the model as it has to be a time series with frequency greater than 1 and since we are having a yearly time series data we don't use cyclic or seasonal trend model. But by analyzing the ACF of time series dataset we can find a possible frequency for the seasonality and plot the seasonal trend for annual series.
+
+```{r}
+acf(ozonets, main="ACF of Time series - Figure 17")
+```
+
+From the ACF plot we can find a possible frequency for the time series dataset. In the above ACF we consider the wave pattern and count the number frequency between two high frequency line. 
+Here the frequency is assumed as 3.
+
+### Plot and Summary Statistics
+
+```{r}
+ozone1ts<-ts(ozone,start=c(1927,1),end=c(2016,3),frequency = 3)
+plot(ozone1ts,lwd=2,ylab="Ozone layer thickness",main="Time Series Plot with Seasonality - Figure 18")
+```
+
+We can observe the seasonal trend from the plot. 
+
+```{r}
+freq.=season(ozone1ts)
+ozonesm=lm(ozone1ts~freq.)
+summary(ozonesm)
+```
+
+From the summary we can observe that the p-value of the overall model and the seasons is greater than the alpha value of significance, 0.05 and both the multiple R<sup>2</sup> and adjusted R<sup>2</sup> are very low and insignificant.
+
+### Residual Analysis
+#### Time Series Plot of Standardized Residuals
+
+```{r}
+ozonesm.res<-rstudent(ozonesm)
+plot(ozonesm.res,x=as.vector(time(ozone1ts)),xlab='Time', ylab='Standardized Residuals',type='o',main="Time series Plot of Residuals - 19")
+```
+
+From Figure 19 the residuals follows a seasonality pattern and is found to be around 0.
+
+#### Histogram of Standardized Residuals
+
+```{r}
+hist(ozonesm.res,xlab='Standardized Residuals', main = "Histogram of the standardized residuals - Figure 20", freq = FALSE, ylim = c(0,0.5))
+curve(dnorm(x, mean=mean(ozonehm.res), sd=sd(ozonehm.res)), col="red", lwd=2, add=TRUE, yaxt="n")
+```
+
+From the above histogram we can observe that the plot is not following normality.
+
+#### Q-Q Plot of Standardized Residuals
+
+```{r}
+qqnorm(ozonesm.res, main="Q-Q Plot for the Linear Model- Figure 21")
+qqline(ozonesm.res, col="red")
+```
+
+From the figure 21 we observe that the data doesn't follow the trend and hence is not normally distributed.
+
+#### Shapiro-Wilk Test
+
+```{r}
+shapiro.test(ozonesm.res)
+```
+
+The p-value is less than the significant alpha, 0.05 and hence we reject null hypothesis and conclude that the data is not normally distributed.
+
+#### Auto-correlation Function of Standardized Residuals
+
+```{r}
+acf(ozonesm.res,main="ACF of Standardized Residuals - Figure 22")
+```
+
+The ACF plot has slow decaying pattern and correlation value is significantly high in most of the lags.
+
+# Conclusion on Model Fitting
+
+* By observing our analysis done on various model fitting we can narrow down the model to be either linear trend or quadratic trend model. 
+* With the residual analysis results, we can conclude that quadratic trend model had good fit over linear trend model.
+* The coefficient of determination namely adjusted R<sup>2</sup> is larger in case of quadratic trend model which describes the variation in the time series.
+* Although we conclude that quadratic trend is good fit, it is not the best fit. To find best fit we could further analyze the time series data with ARIMA models as the time series has both AR and MA behavior (Analysis done in coming chapters).
+
+# Forecast - 5 years Prediction
+
+* Post finding the fit for model we predict the value of ozone thickness for the next 5 years.
+* We use the quadratic trend model fit for forecasting.
+* The forecasting is done with forecast limit of 5% and is expected to be with the range.
+
+```{r}
+t=time(ozonets)
+t2=t^2
+ozonef = lm(ozonets~t+t2)
+Year = c(2017, 2018, 2019, 2020, 2021)
+ozone1 = data.frame(t = Year, t2 = Year^2, 1)
+forecast = predict(ozonef,ozone1, interval = "prediction")
+forecast
+```
+
+```{r, fig.width=10,fig.align="center"}
+plot(ozonets,type='o',xlim = c(1927,2021),ylim=c(-15,5),xlab="Year",ylab='Thickness of Ozone Layer(Dobson Units)',main="Time series Plot - Change in Ozone Layer Thickness - Figure 23" )
+#We convert forecast to time series object
+lines(ts(as.vector(forecast[,1]),start = 2017),col="red",type="l")
+lines(ts(as.vector(forecast[,2]),start = 2017),col="blue",type="l")
+lines(ts(as.vector(forecast[,3]),start = 2017),col="blue",type="l")
+legend("bottomleft", lty=1, bty = "n",pch=1, col=c("black","blue","red"), text.width =12,
+       c("Data","5% Forecast limits", "Forecasts"))
+
+```
+
+The prediction from the data and plot is that the thickness of Ozone layer has a downward decreasing trend in future which is matter of concern for our environment. 
+
+# ARIMA Model
+
+## ADF Test
+In ADF we test the null hypothesis that the series is non-stationary and alternate hypothesis that the series is stationary.
+
+```{r}
+adf.test(ozonets,alternative = c("stationary"))
+```
+
+From ADF Test we can observe that the p-value is closer to the significance level of 0.05. Hence we change the k value in the ADF Test from default value. The k value is taken 1 less and 1 greater than the default value, 4.
+
+```{r}
+adf.test(ozonets,k=3,alternative = c("stationary"))
+```
+
+```{r}
+adf.test(ozonets,k=5,alternative = c("stationary"))
+```
+
+From the test we can observe that for k=5 the p-value is significantly greater than alpha value of 0.05.
+
+## ACF & PACF Plots
+
+```{r}
+acf(ozonets,main="ACF of Time Series Data - Figure 24")
+pacf(ozonets,main="PACF of Time Series Data - Figure 25")
+```
+
+We can observe that there is slowly decaying pattern in the ACF plot and high correlation and significance in the first lag of PACF giving strong evidence on non-stationary property of the series. 
+
+In order to remove the non-stationary property we apply a few transformation techniques. 
+
+## Transformation
+
+### Log Transformation
+
+Using the log transformation method we transform the non-stationary series into stationary. Since there is negative values in the series, the series is shifted by adding a value which the absolute value of the minimum value in the ozone layer thickness time series and add with a constant to avoid zero value if any. 
+
+```{r}
+ozone1 = ozonets+ abs(min(ozonets))+1
+ozonelog<-log(ozone1)
+plot(ozonelog,ylab="Log(Ozone Layer thickness", main=" Log transformed time series plot of Ozone layer thickness - Figure 26",type="o")
+```
+
+There is very slight difference in the time series plot while comparing the original one but not enough details. Hence we find the first difference of the log transformed series.
+
+```{r}
+ozonelgdiff<-diff(ozonelog,differences = 1)
+plot(ozonelgdiff,type="o",ylab="First differenced log transformation of ozone layer thickness - Figure 27",xlab="Year")
+```
+
+The series looks more as a stationary series. ADF Test is done to understand the null hypothesis .i.e.the series is non-stationary and alternate hypothesis, the series is stationary.
+
+```{r}
+adf.test(ozonelgdiff)
+```
+
+From ADF Test we can observe that the p-value is less than the significance alpha value of 0.05 and hence we reject the null hypothesis, .i.e the series is non-stationary.
+
+### Box-Cox Transformation
+
+Using BoxCox function we transform the time series to stationary series. The series is found to have negative values or zero values and hence we add a value to the series. The series gets shifted and it doesn't effect the correlation. We add the absolutes value of the minimum value from series and add a constant to avoid any zero value(1 in this case). 
+
+"ozonebc<-BoxCox.ar(ozonets)" creates an error - "Error in BoxCox.ar(ozonets) : Data values must be positive"
+
+```{r}
+options(warn=-1)
+ozonebc<-BoxCox.ar(ozonets+ abs(min(ozonets))+1)
+ozonebc$ci
+mean(ozonebc$ci)
+```
+
+```{r}
+lambda <- mean(ozonebc$ci)
+ozone1 = ozonets+ abs(min(ozonets))+1
+ozonebcts = (ozone1^lambda-1)/lambda
+plot(ozonebcts,ylab="BoxCox transformed ozone layer thickness series", xlab="Year",type="o",main="BoxCox Transformed Time Series - Figure 28")
+```
+
+There is only a very slight change in plot when compared to the actual time series plot and hence we try to achieve stationarity with differencing.
+
+```{r}
+ozonebctsdiff<-diff(ozonebcts,differences = 1)
+plot(ozonebctsdiff,ylab="First differenced BoxCox transformation of ozone layer thickness", xlab="Year",type="o",main="BoxCox Transformed and Differenced Time Series - Figure 29")
+```
+
+The difference series of the BoxCox transformed time series looks more stationary than the transformed and original series. We conduct a ADF Test to find the hypothesis. 
+
+```{r}
+adf.test(ozonebctsdiff)
+```
+
+From ADF Test we observe that the p-value is less than the alpha value, 0.05 and hence we reject the null hypothesis and confirm stationarity of the series. 
+
+### Selection from Transformed series
+
+Observing the time series plot of the first difference BoxCox transformation and log transformation, we select the BoxCox transformation series as it looks more stationary with less variance and high points. 
+
+## Ploting ACF and PACF post Transformation
+
+We plot the ACF and PACF plots of the difference-BoxCox transformed data.
+
+```{r}
+acf(ozonebctsdiff,main="ACF of first difference BoxCox transformed Time Series Data - Figure 30")
+pacf(ozonebctsdiff,main="PACF of first difference BoxCox transformed Time Series Data - Figure 31")
+```
+
+From the ACF plot we observe the q values as 1,2,3 and from PACF the p values are 2 and 3.
+In ACF plot we don't consider the at 10. In the PACF plot we take 3 scenarios wherein 1 is considered when the lags are considered upto 5 and the second lag is considered to be less significant and in the second scenario then we consider the 2nd one and in the 3rd we consider all the 3. 
+
+## EACF Method
+
+From the EACF table we consider the top most left "o" and the neighboring "o"'s while considering p and q value.
+
+p values : 0,1 <br>
+q values : 0,1
+
+```{r}
+eacf(ozonebctsdiff)
+```
+
+## BIC Table
+
+In BIC table we consider the nar and nma values to be 4 as at higher values the significant value changes drastically. The 'test-lag' represents the p value and 'error-lag' represents q value.
+
+p values : 3,4 <br>
+q values : 2
+
+```{r}
+ozonebic=armasubsets(y=ozonebctsdiff,nar=4,nma=4,y.name='test',ar.method = 'ols')
+plot(ozonebic)
+```
+
+# Models 
+* ARIMA model is represented as  ARIMA(p,d,q)
+* d value is 1 since the differencing is done once.
+
+From ACF, PACF, EACF and BIC table the probable models are: <br>
+* ARIMA (0,1,0)<br>
+* ARIMA (0,1,1)<br>
+* ARIMA (1,1,1)<br>
+* ARIMA (2,1,1)<br>
+* ARIMA (2,1,2)<br>
+* ARIMA (2,1,3)<br>
+* ARIMA (3,1,1)<br>
+* ARIMA (3,1,2)<br>
+* ARIMA (3,1,3)<br>
+* ARIMA (4,1,2)<br>
+
+# Summary and Conclusion
+
+The Ozone layer thickness data were analyzed. Initially, the data description was done to understand the dimensions of the data and converted it into time series data. The data description was done based on the five points associated with the series. The model fitting is done by considering linear, quadratic, harmonic, and seasonal trends, and the best fit among the four was found. Within the limits of the task in this report, we understand that quadratic trend is not the best fit and we move to fit the best fit using ARIMA Modeling.
+The time-series data was transformed and differencing was done before modeling. The models were distinguished using ACF-PACF plots, EACF, and BIC methods. 
+The probable set of models were discussed at the end. 
+
+# Reference
+
+1. Home - RDocumentation. (2021). Retrieved 11 April 2021, from https://www.rdocumentation.org/<br>
+2. Cryer, Jonathan D., and Kung-Sik. Chan. Time Series Analysis With Applications in R . 2nd ed. 2008. New    York, NY: Springer New York, 2008. Web.<br>
+3. Demirhan, H. (2021). Math1318 Time Series Analysis[Lecture Notes].Canvas@RMIT University. https://rmit.instructure.com/courses/79716/modules <br>
+4. Yihui Xie, E. (2021). R Markdown Cookbook. Retrieved 11 April 2021, from https://bookdown.org/yihui/rmarkdown-cookbook/ <br>
