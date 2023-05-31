@@ -1,0 +1,653 @@
+---
+title: "MATH1318 Time Series Analysis Project"
+subtitle: 'Predction of Monthly prodcution of Electric & Gas for next 10 Years'
+author:
+  - name: Amal Gopidasan Nair - S3820786
+  - name: Dileep Dineshan - S3803335
+  - name: Joel Varghese Cherian - S3808033 
+  - name: Navanitha Chalil Vayalabron -S3799569
+  - name: Sony Kulathumkarottu Baby - S3824068
+    affiliation: RMIT University
+output: 
+  html_document:
+    toc: yes
+    toc_depth: 3
+    number_sections: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(TSA)
+library(tseries)
+library(readr)
+library(lmtest)
+library(fUnitRoots)
+library(forecast)
+library(CombMSC)
+library(radix)
+library(lattice)
+library(leaps)
+library(ltsa)
+library(bestglm)
+library(FitAR)
+library(astsa)
+options(warn=-1)
+sort.score <- function(x, score = c("bic", "aic")){
+  if (score == "aic"){
+    x[with(x, order(AIC)),]
+  } else if (score == "bic") {
+    x[with(x, order(BIC)),]
+  } else {
+    warning('score = "x" only accepts valid arguments ("aic","bic")')
+  }
+}
+residual.analysis <- function(model, std = TRUE,start = 2, class = c("ARIMA","GARCH","ARMA-GARCH", "fGARCH")[1]){
+  library(TSA)
+  library(FitAR)
+  if (class == "ARIMA"){
+    if (std == TRUE){
+      res.model = rstandard(model)
+    }else{
+      res.model = residuals(model)
+    }
+  }else if (class == "GARCH"){
+    res.model = model$residuals[start:model$n.used]
+  }else if (class == "ARMA-GARCH"){
+    res.model = model@fit$residuals
+  }else if (class == "fGARCH"){
+    res.model = model@residuals
+  }else {
+    stop("The argument 'class' must be either 'ARIMA' or 'GARCH' ")
+  }
+  par(mfrow=c(3,2))
+  plot(res.model,type='o',ylab='Standardised residuals', main="Time series plot of standardised residuals")
+  abline(h=0)
+  hist(res.model,main="Histogram of standardised residuals")
+  qqnorm(res.model,main="QQ plot of standardised residuals")
+  qqline(res.model, col = 2)
+  acf(res.model,main="ACF of standardised residuals")
+  print(shapiro.test(res.model))
+  k=0
+  LBQPlot(res.model, lag.max = 30, StartLag = k + 1, k = 0, SquaredQ = FALSE)
+  par(mfrow=c(1,1))
+}
+```
+
+# Introduction
+
+In this report, we are looking at the monthly industrial production of electric and gas utilities from the year 2000 to 2021 in the United States.In United States, the industrial production increases every year.The data is all about the real production of all important enterprises in the United States, regardless of who owns them.
+We analyze monthly changes in the production between 2000 to 2021.
+In this project, we analyze the relevant time series analysis modeling to accurately predict the time series for the next 10 years.
+
+# Data Description
+
+* The dataset is about the monthly industrial production of electricity and gas utilities which is provided in csv format.
+* The dataset consists of 253 observations from January 2000 to January 2001.
+* The dataset contains two columns: observation date and energy production.
+
+# Data Preparation
+
+* The dataset is read and then converted into Time Series object.
+
+```{r}
+eg<-read.csv("electric.csv")
+egts = matrix(eg$IPG2211A2N)
+egts = as.vector(t(egts))
+egts = ts(egts,start=c(2000,1),end=c(2021,1),frequency = 12)
+class(egts)
+```
+
+# Model Descriptive Analysis
+
+For further analysis, the time series plot and scatter plot is generated to understand the five major points associated with the series and the correlation with subsequent years respectively. We also plot the time series plot with month label to understand the seasonal effect in the series.
+
+```{r}
+plot(egts,type='o',ylab='Electric & Gas Production',xlab='Year',main='Time Series plot of Industrial Production-Figure 1')
+plot(egts,xlab='Year',type='l',ylab='Electric & Gas Production',main='Time series Plot with Month label - Figure 2')
+points(y=egts,x=time(egts), pch=as.vector(season(egts)))
+```
+
+From the above plots(Fig 1 and Fig 2), we can discuss the major 5 characteristics of the series:
+
+**1.Trend**: Here, we can see a slight upward trend in the series which shows that the energy production is increasing over the years.
+
+**2.Seasonality**: From the figure 2, we can observe seasonality in the series i.e., there are repeating patterns in the series.
+
+**3.Changing Variance**: We can see that there is no change in the variance.
+
+**4.Behavior**: Here, we cannot say about the moving average and autoregressive behavior of the series due to the seasonality.
+
+**5.Change point**: There is no changing point or intervention point on the plot. 
+
+From Fig 2 we can observe that the production is high during January months and low during August months.<br>
+To discuss and understand about the relationship between the neighboring pairs, we can generate a scatter plot. And the correlation between the numerical values can be calculated by using the index method.
+
+```{r}
+plot(y=egts,x=zlag(egts),xlab='Lag',ylab='Electric & Gas Production',main='Scatter plot of Industrial Production - Figure 3') 
+y = egts
+x=zlag(egts)
+index = 2:length(x)
+cor(y[index],x[index])
+```
+
+From figure 3 and the correlation factor(~56%) we can observe that the correlation between the succeeding year and the production of one month is not that high. The scatter plot has a positive linear trend but the points are scattered around. 
+
+# Model Fitting
+
+The time series object is analyzed for finding the best model fit. We consider cosine and seasonal trends to find the bet fitting model.
+
+## Harmonic/Cosine Trend Model
+
+Since there is a seasonal trend in the series we analyze the dataset with harmonic trend model to understand the fit.
+
+### Summary Statistics
+
+For getting the summary statistics we use the harmonic() function, where we need to add the time series object and an m value which is the number of pairs of harmonic functions to be created; 2m must be less than or equal to the frequency of x.
+
+```{r}
+harm.=harmonic(egts,m=1) # calculate cos(2*pi*t) and sin(2*pi*t)
+eghm=lm(egts~harm.)
+summary(eghm)
+```
+
+The p value is less than the significant value of 0.05 which signifies that the harmonic fit can be significant but the R<sup>2</sup> value is 0.04 which is very low. This implies that around 40% of the variation in the time series is explained by the harmonic model.
+
+### Residual Analysis
+
+Residual Analysis is performed to validate the model.
+
+#### Time Series Plot of Standardized Residuals
+
+```{r}
+eghm.res<-rstudent(eghm)
+plot(eghm.res,x=as.vector(time(egts)),xlab='Time', ylab='Standardized Residuals',type='o',main="Time series Plot of Residuals - Figure 4")
+```
+
+From the fig 4, we can observe that most of the points are around the mean value for the residuals.
+
+#### Histogram of Standardized Residuals
+
+```{r}
+hist(eghm.res,xlab='Standardized Residuals', main = "Histogram of the standardized residuals - Figure 5", freq = FALSE, ylim = c(0,0.6))
+curve(dnorm(x, mean=mean(eghm.res), sd=sd(eghm.res)), col="red", lwd=2, add=TRUE, yaxt="n")
+```
+
+There histogram shows that the residual's normality is less with major data on the left side.
+
+#### Q-Q Plot of Standardized Residuals
+
+```{r,fig.width=10,fig.align="center"}
+qqnorm(eghm.res, main="Q-Q Plot for the Linear Model- Figure 6")
+qqline(eghm.res, col="red")
+```
+
+From QQ plot we observe that many points are not in line with normality.
+
+#### Shapiro-Wilk Test
+
+Shapiro-Wilk test calculates the correlation between the residuals and the corresponding normal quantiles.
+
+```{r}
+shapiro.test(rstudent(eghm))
+```
+
+The p-value is less than the alpha significance and hence we reject the null hypothesis and conclude that the time series is not normally distributed.
+
+#### Auto-correlation Function Plot of Standard Residuals
+
+```{r}
+acf(eghm.res,main="ACF of Standardized Residuals - Figure 7")
+```
+
+The ACF plot follows a slow decaying pattern and at all points the correlation value is significantly higher than the limits. This implies that the time series is non-stationary.
+
+## Seasonal Model
+
+As the series is monthly and has a seasonality, we fit it with the seasonal model.
+
+### Summary Statistics
+
+```{r}
+month.=season(egts) # period added to improve table display and this line sets up indicators
+egsm=lm(egts~month.,-1) # -1 removes the intercept term
+summary(egsm)
+```
+
+The p value is less than the significant alpha level of 0.05 which implies the seasonal model is significant and has a R<sup>2</sup> is 76.36% which means that 76% variation of the time series is explained by the seasonal trend.
+
+### Residual Analysis
+#### Time Series Plot of Standardized Residuals
+
+```{r}
+res.egsm = rstudent(egsm)
+plot(ts(fitted(egsm)), ylim = c(min(c(fitted(egsm), as.vector(egts))), max(c(fitted(egsm),as.vector(egts)))),ylab='y',
+     main = "Fitted seasonal model. Figure 8",type='l', col = "red")
+lines(as.vector(egts))
+```
+
+The seasonal trend is observed in the time series plot. 
+
+#### Histogram of Standardized Residuals
+
+```{r}
+hist(res.egsm,xlab='Standardized Residuals', main = "Histogram of standardised residuals.Figure 9")
+```
+
+From the figure 9, we can see that the histogram is somewhat in a symmetric form with a left skew distribution.
+
+#### Q-Q Plot of Standardized Residuals
+
+```{r}
+qqnorm(y=res.egsm, main = "QQ plot of standardised residuals.Figure 10")
+qqline(y=res.egsm, col = 2, lwd = 1, lty = 2)
+```
+
+From the figure 10, we can observe that the Q-Q plot is not exactly like a straight line. So now we can say that the data does not follows a normal distribution. 
+
+#### Shapiro-Wilk Test
+
+```{r}
+shapiro.test(res.egsm)
+```
+
+The p-value is less than the significant alpha, 0.05 and hence we reject the null hypothesis that the stochastic component of this model is normally distributed.
+
+#### Auto-correlation Function Plot of Standard Residuals
+
+```{r}
+acf(res.egsm,main="ACF of Standardized Residuals - Figure 11")
+```
+
+From ACF plot we can observe that it follows a slow decaying pattern and all lags are above the limit.
+
+# Log Transformation
+
+Using the log transformation method we transform the non-stationary series into stationary.
+```{r}
+eglog<-log(egts)
+plot(eglog, type='o',main=' Time Series plot of log transformed data Figure 12')
+```
+
+There is very slight difference in the time series plot while comparing the original one but not enough details.
+We generate ACF and PACF plots for the log-transformed data
+
+```{r}
+acf(eglog, main = ' ACF plot for log-transformed data Figure 13')
+pacf(eglog, main = ' PACF plot for log-transformed data Figure 14')
+```
+
+ACF plot has slow decaying pattern at seasonal lag and PACF has slow decay pattern.
+
+# ADF Test
+
+The Augmented Dickey-Fuller Test is used to test the null hypothesis that the process is non-stationary but becomes stationary after first differencing and the alternative hypothesis is that the process is stationary.
+
+```{r}
+adf.test(eglog)
+```
+
+From the above result, we can see that the p-value is 0.01 which is less than the significant alpha value 0.05 and therefore, we reject the null hypothesis.
+
+# Seasonal ARIMA Model(SARIMA)
+
+To deal with the seasonality in the time series, we need to go through the Seasonal ARIMA models.
+
+A seasonal ARIMA model is formed by including additional seasonal terms in the ARIMA models. 
+
+SARIMA models have two sets of orders (p,d,q) for the regular part of the model and (P,D,Q) for the seasonal part of the model and a frequency.
+So we show the model as *SARIMA(p,d,q)×(P,D,Q)_s*
+where 
+- p is the autoregressive (ar) order 
+- d is the number of ordinary differences 
+- q is the moving average (ma) order 
+- P is the Seasonal autoregressive (sar) order 
+- D is the number of seasonal differences 
+- Q is the Seasonal moving average (sma) order 
+- s is the period.
+
+## First Differencing
+
+Here we need to do the seasonal differencing for the further analysis.
+The seasonal difference of period  for the series {Y_t} is defined as
+     ∇_sY_t = Y_t-Y_(t−s)
+     
+Here we are doing the residuals after applying D=1.
+
+## Residuals Approach
+### Specification of seasonal part (D=1)
+
+To do further analysis, we will generate time series plot, ACF plot and PACF plot by using following codes.
+
+Now we will fit SARIMA(0,0,0)x(0,1,0)_12 model and display time series, ACF and PACF plots of the residuals.
+
+```{r}
+m.eg= arima(eglog,order=c(0,0,0),seasonal=list(order=c(0,1,0), period=12),method = "ML")
+res.m = residuals(m.eg);  
+plot(res.m,xlab='Time',ylab='Residuals',main=" Time series plot of the residuals- Figure 15")
+acf(res.m, lag.max = 48, main = " The sample ACF of the residuals- Figure 16")
+pacf(res.m, lag.max = 48, main = " The sample PACF of the residuals- Figure 17")
+
+```
+
+From the above time series plot, we can observe that there is no specific trend in the plot and we cannot observe any changing variance in the time series.
+
+From the ACF plot, we can observe 3 significant seasonal lags at 1, 2 and 4. And similarly in the PACF plot, we can observe 3 significant seasonal lags at 1, 2 and 3.
+
+And the seasonal trend is removed from the time series after applying the first differencing itself, i.e., D=1.
+
+### Specification of seasonal part (D=1 P=3 Q=3)
+
+Now we will fit SARIMA(0,0,0)x(3,1,3)_12 model and display time series, ACF and PACF plots of the residuals.
+
+```{r}
+m1.eg= arima(eglog,order=c(0,0,0),seasonal=list(order=c(3,1,3), period=12),method = "ML")
+res.m1 = residuals(m1.eg);  
+plot(res.m1,xlab='Time',ylab='Residuals',main=" Time series plot of the residuals-Figure 18")
+acf(res.m1, lag.max = 48, main = "The sample ACF of the residuals- Figure 19")
+pacf(res.m1, lag.max = 48, main = "The sample PACF of the residuals- Figure 20")
+```
+
+From the time series plot, we can observe that there is no specific trend in the plot.
+
+From the ACF plot, we cannot find any correlation between the values and there are no significant lag in the seasonal lags.
+
+From the PACF plot, we can find slight correlation between the values and also there are significant seasonal lags at 1 and 3. But there is no significance at lag 2, so it can be disregarded.
+
+### Specification of Ordinary part (D=1 P=3 Q=3 d=1)
+
+Here, we need to deal with the ordinary lag, so we did the first differencing and we generate the following outputs.
+
+Now we will fit SARIMA(0,1,0)x(3,1,3)_12 model and display time series, ACF and PACF plots of the residuals.
+
+```{r}
+
+m2.eg= arima(eglog,order=c(0,1,0),seasonal=list(order=c(3,1,3), period=12))
+res.m2 = residuals(m2.eg);  
+plot(res.m2,xlab='Time',ylab='Residuals',main="Figure 22: Time series plot of the residuals")
+acf(res.m2, lag.max = 48, main = " The sample ACF of the residuals-Figure 23")
+pacf(res.m2, lag.max = 48, main = " The sample PACF of the residuals- Figure 24")
+```
+
+There is no specific trend shown in the time series plot.
+
+And we can observe that all seasonal lags or correlation are removed from the ACF plot and PACF plot.
+
+By analyzing the ACF plot, we can take q value as 2 and from the PACF plot, we can take p value as 4 at the ordinal lags. 
+
+### Specification of Ordinary part (D=1 P=3 Q=3 d=1 p=4 q=2)
+
+Now we will fit SARIMA(4,1,2)x(3,1,3)_12 model and display time series, ACF and PACF plots of the residuals.
+
+```{r}
+
+m3.eg= arima(eglog,order=c(4,1,2),seasonal=list(order=c(3,1,3), period=12))
+res.m3 = residuals(m3.eg);  
+plot(res.m3,xlab='Time',ylab='Residuals',main=" Time series plot of the residuals - Figure 23")
+acf(res.m3, lag.max = 48, main = " The sample ACF of the residuals-Figure 24")
+pacf(res.m3, lag.max = 48, main = " The sample PACF of the residuals- Figure 25")
+```
+
+From the above plots, we can see that the time series plot does not show any trend. And there is no significant lags showing near zero in ACF and PACF plot.
+
+So by analyzing the above outputs, we obtain our final SARIMA model as SARIMA(4,1,2)x(3,1,3)_12 model.
+
+## EACF
+
+The Extended Autocorrelation Function (EACF) method uses the fact that if the AR part of a mixed ARMA model is known, “filtering out” the autoregression from the observed time series results in a pure MA process that enjoys the cutoff property in its ACF.
+
+Now we can use the EACF method on the residuals.
+
+```{r}
+eacf(res.m2)
+```
+
+From EACF we consider the top left '0' which is not interrupted by 'x' to find out model.
+The p and q values considered are:
+* p = 0,1
+* q = 2,3
+
+The models are **(0,1,2), (0,1,3), (1,1,2) and (1,1,3)**.
+
+## BIC
+
+Another widely used criterion in model selection is Bayesian Information Criterion (BIC). In BIC table we consider the nar and nma values to be 4 as at higher values the significant value changes drastically. The 'test-lag' represents the p value and 'error-lag' represents q value.
+
+```{r}
+bic = armasubsets(y=res.m2,nar=5,nma=5,y.name='test',ar.method='ols')
+plot(bic)
+```
+
+From BIC Table we can find the p and q values as:
+p = 0
+q = 1,2,5
+
+Models from BIC are **(0,1,1), (0,1,2), (0,1,5)**.
+
+## ADF Test
+
+```{r}
+adf.test(res.m2)
+```
+
+From the above result, we can see that the p-value is 0.01 which is less than the significant alpha value 0.05 and therefore, we reject the null hypothesis.
+
+## Model Fitting
+
+**Final set of possible models are given below:** </p>
+
+**SARIMA(1,1,2)(3,1,3)** </p>
+
+**SARIMA(1,1,3)(3,1,3)**</p>
+
+**SARIMA(0,1,3)(3,1,3)** </p>
+
+**SARIMA(0,1,1)(3,1,3)** </p>
+
+**SARIMA(0,1,2)(3,1,3)** </p>
+
+**SARIMA(0,1,5)(3,1,3)** </p>
+
+**SARIMA(4,1,2)(3,1,3)** </p>
+
+# Parameter Estimations
+
+Model fitting for parameter estimation is straight forward by the use of R. Here we are using the ML method and the coefficient test on the selected models one by one.
+
+## SARIMA(1,1,3)(3,1,3)
+
+We do not consider this model as we get the 'infinite error' while doing parameter estimation.
+
+## SARIMA(1,1,2)(3,1,3)_12
+
+```{r}
+m5_112 = arima(eglog,order=c(1,1,2),seasonal=list(order=c(3,1,3), period=12),method = "ML")
+coeftest(m5_112)
+residual.analysis(model = m5_112)
+```
+
+From the above z-test result, we can see that all ar, ma, seasonal ar and seasonal ma components are significant but we have two values are missing in the result.
+From the shapiro-wilk test, we can say that the p value is 0.4272 and so it indicates the normality of the data.
+
+From the residual plots we can observe that:<br>
+
+* There slight trend in the time series plot with little variance from 2000 to 2005.<br>
+* The histogram follows a normal distribution with a slight left skew.<br>
+* Almost all points are on the normality line for the QQ Plot. <br>
+* The ACF plot follows a white noise series with one lag which is far from the zero.<br>
+* Few points are on the line for the Ljung Box test. <br>
+
+## SARIMA(0,1,3)(3,1,3)_12
+
+```{r}
+m5_013 = arima(eglog,order=c(0,1,3),seasonal=list(order=c(3,1,3), period=12),method = "ML")
+coeftest(m5_013)
+residual.analysis(model = m5_013)
+```
+
+From the above z-test result, we can see that two ma and one seasonal ar components are significant while all seasonal ma components and others are insignificant.
+From the shapiro-wilk test, we can say that the p value is 0.815, which is the largest p-value among all and so it indicates the normality of the data.
+
+From the residual plots we can observe that:<br>
+
+* There is no specific trend in the time series plot.<br>
+* The histogram follows a normal distribution.<br>
+* Expect for one point all are in line for the QQ Plot<br>
+* The ACF depicts a white noise series.<br>
+* All points are above the threshold limit in Ljung box test.<br>
+
+## SARIMA(0,1,1)(3,1,3)_12
+
+```{r}
+m5_011 = arima(eglog,order=c(0,1,1),seasonal=list(order=c(3,1,3), period=12),method = "ML")
+coeftest(m5_011)
+residual.analysis(model = m5_011)
+```
+
+From the above z-test result, we can see that the ma and one seasonal ar components are significant while all seasonal ma components and others are insignificant.
+From the shapiro-wilk test, we can say that the p value is 0.21 and so it indicates the normality of the data.
+
+From the residual plots we can observe that:<br>
+
+* There is no specific trend in the time series plot.<br>
+* The histogram follows a skewed distribution.<br>
+* Most of the points are in line for the QQ Plot.<br>
+* The ACF plot have 2 slight significant lags.<br>
+* Few points are below the threshold limit and most of the points are very close to the threshold limit in the Ljung Box Test.<br>
+
+## SARIMA(0,1,2)(3,1,3)_12
+
+```{r}
+m5_012 = arima(eglog,order=c(0,1,2),seasonal=list(order=c(3,1,3), period=12),method = "ML")
+coeftest(m5_012)
+residual.analysis(model = m5_012)
+```
+
+From the above z-test result, we can see that the all ma and one seasonal ar components are significant while all seasonal ma components and others are insignificant.
+From the shapiro-wilk test, we can say that the p value is 0.66 and so it indicates the normality of the data.
+
+From the residual plots we can observe that:<br>
+
+* There is no specific trend in the time series plot.<br>
+* The histogram follows a normal distribution.<br>
+* Expect for one point all are in line for the QQ Plot.<br>
+* The ACF depicts a white noise series.<br>
+* Few points are on the threshold limit in Ljung Box test.<br>
+
+## SARIMA(0,1,5)(3,1,3)_12
+
+```{r}
+m5_015 = arima(eglog,order=c(0,1,5),seasonal=list(order=c(3,1,3), period=12),method = "ML")
+coeftest(m5_015)
+residual.analysis(model = m5_015)
+```
+
+From the above z-test result, we can see that the two ma and one seasonal ar components are significant while all highest ma components are insignificant. Also all seasonal ma components and others are insignificant.
+From the shapiro-wilk test, we can say that the p value is 0.77 and so it indicates the normality of the data.
+
+From the residual plots we can observe that:<br>
+
+* There is no specific trend in the time series plot.<br>
+* The histogram follows almost a normal distribution.<br>
+* Expect for one point all are in line for the QQ Plot.<br>
+* The ACF depicts a white noise series.<br>
+* All points are above the threshold limit in Ljung box test.<br>
+
+## SARIMA(4,1,2)(3,1,3)_12
+
+```{r}
+m5_412 = arima(eglog,order=c(4,1,2),seasonal=list(order=c(3,1,3), period=12),method = "ML")
+coeftest(m5_412)
+residual.analysis(model = m5_412)
+```
+
+From the above z-test result, we can see that the two ar, one ma and one seasonal ar components are significant while all seasonal ma components and others are insignificant.
+From the shapiro-wilk test, we can say that the p value is 0.411 and so it indicates the normality of the data.
+
+From the residual plots we can observe that:<br>
+
+* There is no specific trend in the time series plot.<br>
+* The histogram follows almost normal distribution.<br>
+* Expect for one point all are in line for the QQ Plot.<br>
+* The ACF depicts a white noise series.<br>
+* All points are above the threshold limit in Ljung box test.<br>
+
+## AIC BIC Score
+
+* AIC is an estimate of the prediction error and therefore the relative quality of the statistical model for a given data set.
+* BIC is an estimate of the posterior probability function that the model is  true under a certain Bayesian configuration.
+
+To find the best model we use AIC/BIC score.
+
+```{r}
+sc.AIC=AIC(m5_112,m5_013,m5_011,m5_012,m5_015,m5_412)
+sc.BIC=AIC(m5_112,m5_013,m5_011,m5_012,m5_015,m5_412, k = log(length(egts)))
+```
+
+**AIC Score**
+```{r}
+sort.score(sc.AIC, score = "aic")
+```
+
+**BIC Score**
+```{r}
+sort.score(sc.BIC, score = "aic")
+```
+
+From the AIC and BIC score we observe that model m5_412, m5_015, m5_012 and m5_013 are the top models. Considering the residual results and the AIC/BIC score we obtain **SARIMA(0,1,3)(3,1,3)** as the best model fit for the time series.
+
+## Best Model
+
+We consider **SARIMA(0,1,3)(3,1,3)** as the best model. While doing the residual analysis we can observe that:<br>
+
+* From the parameter estimation we can observe that:<br>
+* There is no trend in the time series plot of standardized residuals and no variance is also observed.<br>
+* The histogram follows a normal distribution. <br>
+* Most of the points are on line in the QQ Plot with very few points out of line at both tails.<br>
+* There are no significant lag in the ACF plot implying a white noise series.<br>
+* All points are above the threshold line in the Ljung Box Test.<br>
+
+Also it has the highest value in the Shapiro Wilk test.
+
+## BEST MODEL - over parametirization
+
+Over parametirization is done to understand if there is better fit for the selected model.
+
+```{r}
+m5_014 = arima(log(egts),order=c(0,1,4),seasonal=list(order=c(3,1,3), period=12),method = "ML")
+coeftest(m5_014)
+residual.analysis(model = m5_014)
+```
+
+There are few significant probability values for the AR/MA/SAR models. And the Shapiro Wilk test gives a p value of 0.7925 indicating normality of the dataset.
+
+From the residual plots we can observe that:<br>
+
+* There is no specific trend in the time series plot.<br>
+* The histogram follows almost normal distribution.<br>
+* Expect for one point all are in line for the QQ Plot.<br>
+* The ACF depicts a white noise series.<br>
+* All points are above the threshold limit in Ljung box test.<br>
+
+## Forecasting - Prediction
+
+We do the prediction of the time series with the selected model for the next 10 years and plot it.
+
+```{r}
+egforecast = Arima(eglog,order=c(0,1,3),seasonal=list(order=c(3,1,3), period=12),method = "ML")
+future = forecast(egforecast, h = 120)
+plot(future,main = "Forecast for 10 years - Figure 26")
+```
+
+The prediction shows similar trend for the next 10 years. We can also observe that the interval increases as the year increases implying that there could be a upper or lower trend in the time series in future. 
+
+# Summary and Conclusion
+
+The Electric and Gas production dataset was analyzed to find the best model. We read the dataset and then converted it into time series object to understand the data description with the 5 major points and scatter plot. The model fitting was done with harmonic and seasonal model and we found that the models are not goof fit for the dataset. We then use Seasonal ARIMA model to understand the dataset. The time series dataset is log transformed and then seasonal differencing is applied to get a model. Using the seasonal differencing we find the seasonal lags and then handle ordinary lags. With this results we do EACF and BIC to find the best fit models for the time series. 
+
+SARIMA Models were analyzed using the residual method and we find the best model fit for predicting the next 10 years outcome. 
+
+# Reference 
+1. Board of Governors of the Federal Reserve System (US), Industrial Production: Utilities: Electric and Gas Utilities (NAICS = 2211,2) [IPG2211A2N], retrieved from FRED, Federal Reserve Bank of St. Louis; https://fred.stlouisfed.org/series/IPG2211A2N, May 25, 2021.
+2. Home - RDocumentation. (2021). Retrieved 11 June 2021, from https://www.rdocumentation.org/<br>
+3. Cryer, Jonathan D., and Kung-Sik. Chan. Time Series Analysis With Applications in R . 2nd ed. 2008. New    York, NY: Springer New York, 2008. Web.<br>
+4. Demirhan, H. (2021). Math1318 Time Series Analysis[Lecture Notes].Canvas@RMIT University. https://rmit.instructure.com/courses/79716/modules <br>
